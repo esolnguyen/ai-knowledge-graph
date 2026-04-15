@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aikgraph-kiro"
+version = "1.0.0"
+description = "Knowledge-graph builder + Kiro IDE/CLI installer (bundles aikgraph)"
+readme = "README.md"
+keywords = ["aikgraph", "kiro", "knowledge-graph", "skill", "tree-sitter"]
+requires-python = ">=3.10"
+dependencies = [
+    "networkx",
+    "tree-sitter>=0.23.0",
+    "tree-sitter-python",
+    "tree-sitter-javascript",
+    "tree-sitter-typescript",
+    "tree-sitter-go",
+    "tree-sitter-rust",
+    "tree-sitter-java",
+    "tree-sitter-c",
+    "tree-sitter-cpp",
+    "tree-sitter-ruby",
+    "tree-sitter-c-sharp",
+    "tree-sitter-kotlin",
+    "tree-sitter-scala",
+    "tree-sitter-php",
+    "tree-sitter-swift",
+    "tree-sitter-lua",
+    "tree-sitter-zig",
+    "tree-sitter-powershell",
+    "tree-sitter-elixir",
+    "tree-sitter-objc",
+    "tree-sitter-julia",
+    "tree-sitter-verilog",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp"]
+neo4j = ["neo4j"]
+pdf = ["pypdf", "html2text"]
+watch = ["watchdog"]
+svg = ["matplotlib"]
+leiden = ["graspologic; python_version < '3.13'"]
+office = ["python-docx", "openpyxl"]
+video = ["faster-whisper", "yt-dlp"]
+all = ["mcp", "neo4j", "pypdf", "html2text", "watchdog", "graspologic; python_version < '3.13'", "python-docx", "openpyxl", "faster-whisper", "yt-dlp", "matplotlib"]
+
+[project.scripts]
+aikgraph = "aikgraph.__main__:main"
+
+[tool.setuptools]
+package-dir = {"aikgraph" = "src"}
+packages = [
+    "aikgraph",
+    "aikgraph.cli",
+    "aikgraph.core",
+    "aikgraph.core.analyze",
+    "aikgraph.extraction",
+    "aikgraph.integrations",
+    "aikgraph.output",
+    "aikgraph.utils",
+]
+
+[tool.setuptools.package-data]
+aikgraph = [
+    "skill.md",
+    "skill-copilot.md",
+    "skill-kiro/*.md",
+]
