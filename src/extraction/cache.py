@@ -1,9 +1,109 @@
 from __future__ import annotations
 
+import atexit
 import hashlib
 import json
 import os
+import threading
 from pathlib import Path
+
+
+_INDEX_NAME = "index.json"
+_INDEX_LOCK = threading.Lock()
+_INDEX_CACHE: dict[Path, dict[str, dict]] = {}
+_INDEX_DIRTY: set[Path] = set()
+
+
+def _index_path(cdir: Path) -> Path:
+    return cdir / _INDEX_NAME
+
+
+def _load_index(cdir: Path) -> dict[str, dict]:
+    """Return the in-memory index for *cdir*, loading from disk on first access."""
+    with _INDEX_LOCK:
+        if cdir in _INDEX_CACHE:
+            return _INDEX_CACHE[cdir]
+        p = _index_path(cdir)
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                data = {}
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        _INDEX_CACHE[cdir] = data
+        return data
+
+
+def _save_index(cdir: Path) -> None:
+    with _INDEX_LOCK:
+        if cdir not in _INDEX_DIRTY:
+            return
+        data = _INDEX_CACHE.get(cdir, {})
+        p = _index_path(cdir)
+        tmp = p.with_suffix(".tmp")
+        try:
+            tmp.write_text(json.dumps(data), encoding="utf-8")
+            os.replace(tmp, p)
+        except OSError:
+            tmp.unlink(missing_ok=True)
+            return
+        _INDEX_DIRTY.discard(cdir)
+
+
+def _index_key(path: Path, root: Path) -> str:
+    try:
+        return str(Path(path).resolve().relative_to(Path(root).resolve()))
+    except ValueError:
+        return str(Path(path).resolve())
+
+
+def _index_lookup(path: Path, root: Path) -> str | None:
+    """Return the cached hash for *path* if mtime+size still match; else None.
+
+    This is the fast path that avoids reading + hashing the whole file.
+    """
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    cdir = cache_dir(root)
+    data = _load_index(cdir)
+    entry = data.get(_index_key(path, root))
+    if entry is None:
+        return None
+    if entry.get("mtime_ns") == st.st_mtime_ns and entry.get("size") == st.st_size:
+        h = entry.get("hash")
+        return h if isinstance(h, str) else None
+    return None
+
+
+def _index_update(path: Path, root: Path, h: str) -> None:
+    """Record (mtime_ns, size, hash) for *path* so the next run can fast-path."""
+    try:
+        st = path.stat()
+    except OSError:
+        return
+    cdir = cache_dir(root)
+    data = _load_index(cdir)
+    key = _index_key(path, root)
+    with _INDEX_LOCK:
+        data[key] = {
+            "mtime_ns": st.st_mtime_ns,
+            "size": st.st_size,
+            "hash": h,
+        }
+        _INDEX_DIRTY.add(cdir)
+
+
+def flush_cache_index() -> None:
+    """Persist any pending cache-index updates to disk. Idempotent; thread-safe."""
+    with _INDEX_LOCK:
+        dirty = list(_INDEX_DIRTY)
+    for d in dirty:
+        _save_index(d)
+
+
+atexit.register(flush_cache_index)
 
 
 def _body_content(content: bytes) -> bytes:
@@ -41,8 +141,10 @@ def file_hash(path: Path, root: Path = Path(".")) -> str:
 
 
 def cache_dir(root: Path = Path(".")) -> Path:
-    """Returns aikgraph-out/cache/ - creates it if needed."""
-    d = Path(root) / "aikgraph-out" / "cache"
+    """Returns the cache/ subdir under the resolved aikgraph-out/ - creates it if needed."""
+    from aikgraph.utils.paths import resolve_out_dir
+
+    d = resolve_out_dir(root) / "cache"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -50,14 +152,20 @@ def cache_dir(root: Path = Path(".")) -> Path:
 def load_cached(path: Path, root: Path = Path(".")) -> dict | None:
     """Return cached extraction for this file if hash matches, else None.
 
-    Cache key: SHA256 of file contents.
-    Cache value: stored as aikgraph-out/cache/{hash}.json
+    Fast path: if (mtime_ns, size) in the index matches the file, reuse the
+    stored hash without reading file contents. Otherwise hash the file and
+    update the index so the next call is fast.
+
+    Cache value: stored as <cache_dir>/{hash}.json.
     Returns None if no cache entry or file has changed.
     """
-    try:
-        h = file_hash(path, root)
-    except OSError:
-        return None
+    h = _index_lookup(path, root)
+    if h is None:
+        try:
+            h = file_hash(path, root)
+        except OSError:
+            return None
+        _index_update(path, root, h)
     entry = cache_dir(root) / f"{h}.json"
     if not entry.exists():
         return None
@@ -70,10 +178,12 @@ def load_cached(path: Path, root: Path = Path(".")) -> dict | None:
 def save_cached(path: Path, result: dict, root: Path = Path(".")) -> None:
     """Save extraction result for this file.
 
-    Stores as aikgraph-out/cache/{hash}.json where hash = SHA256 of current file contents.
+    Stores as <cache_dir>/{hash}.json where hash = SHA256 of current file contents.
+    Updates the mtime/size index so subsequent runs can skip hashing.
     result should be a dict with 'nodes' and 'edges' lists.
     """
     h = file_hash(path, root)
+    _index_update(path, root, h)
     entry = cache_dir(root) / f"{h}.json"
     tmp = entry.with_suffix(".tmp")
     try:
@@ -87,14 +197,17 @@ def save_cached(path: Path, result: dict, root: Path = Path(".")) -> None:
 def cached_files(root: Path = Path(".")) -> set[str]:
     """Return set of file paths that have a valid cache entry (hash still matches)."""
     d = cache_dir(root)
-    return {p.stem for p in d.glob("*.json")}
+    return {p.stem for p in d.glob("*.json") if p.name != _INDEX_NAME}
 
 
 def clear_cache(root: Path = Path(".")) -> None:
-    """Delete all aikgraph-out/cache/*.json files."""
+    """Delete all cache entries (keyed JSON blobs) and the mtime/size index."""
     d = cache_dir(root)
     for f in d.glob("*.json"):
         f.unlink()
+    with _INDEX_LOCK:
+        _INDEX_CACHE.pop(d, None)
+        _INDEX_DIRTY.discard(d)
 
 
 def check_semantic_cache(

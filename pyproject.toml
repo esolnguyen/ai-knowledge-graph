@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aikgraph-kiro"
+name = "aikgraph"
 version = "1.0.0"
 description = "Knowledge-graph builder + Kiro IDE/CLI installer (bundles aikgraph)"
 readme = "README.md"
@@ -63,8 +63,5 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-aikgraph = [
-    "skill.md",
-    "skill-copilot.md",
-    "skill-kiro/*.md",
-]
+aikgraph = ["skills/kiro/SKILL.md"]
+

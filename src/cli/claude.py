@@ -6,6 +6,10 @@ import json
 import re
 from pathlib import Path
 
+from aikgraph.utils.paths import platform_out_dir, write_marker
+
+
+_CLAUDE_OUT = ".claude/aikgraph-out"
 
 _SETTINGS_HOOK = {
     "matcher": "Glob|Grep",
@@ -13,8 +17,10 @@ _SETTINGS_HOOK = {
         {
             "type": "command",
             "command": (
-                "[ -f aikgraph-out/graph.json ] && "
-                r"""echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"aikgraph: Knowledge graph exists. Read aikgraph-out/REPORT.md for god nodes and community structure before searching raw files."}}' """
+                f"[ -f {_CLAUDE_OUT}/graph.json ] && "
+                "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\","
+                f"\"additionalContext\":\"aikgraph: Knowledge graph exists. Read {_CLAUDE_OUT}/REPORT.md "
+                "for god nodes and community structure before searching raw files.\"}}' "
                 "|| true"
             ),
         }
@@ -22,15 +28,15 @@ _SETTINGS_HOOK = {
 }
 
 
-_CLAUDE_MD_SECTION = """\
+_CLAUDE_MD_SECTION = f"""\
 ## aikgraph
 
-This project has a aikgraph knowledge graph at aikgraph-out/.
+This project has a aikgraph knowledge graph at {_CLAUDE_OUT}/.
 
 Rules:
-- Before answering architecture or codebase questions, read aikgraph-out/REPORT.md for god nodes and community structure
-- If aikgraph-out/wiki/index.md exists, navigate it instead of reading raw files
-- After modifying code files in this session, run `python3 -c "from aikgraph.watch import _rebuild_code; from pathlib import Path; _rebuild_code(Path('.'))"` to keep the graph current
+- Before answering architecture or codebase questions, read {_CLAUDE_OUT}/REPORT.md for god nodes and community structure
+- If {_CLAUDE_OUT}/wiki/index.md exists, navigate it instead of reading raw files
+- After modifying code files in this session, run `aikgraph update` to keep the graph current
 """
 
 _CLAUDE_MD_MARKER = "## aikgraph"
@@ -38,25 +44,31 @@ _CLAUDE_MD_MARKER = "## aikgraph"
 
 def claude_install(project_dir: Path | None = None) -> None:
     """Write the aikgraph section to the local CLAUDE.md and register the hook."""
-    target = (project_dir or Path(".")) / "CLAUDE.md"
+    project_dir = project_dir or Path(".")
+    target = project_dir / "CLAUDE.md"
 
     if target.exists():
         content = target.read_text(encoding="utf-8")
         if _CLAUDE_MD_MARKER in content:
             print("aikgraph already configured in CLAUDE.md")
-            return
-        new_content = content.rstrip() + "\n\n" + _CLAUDE_MD_SECTION
+        else:
+            content = content.rstrip() + "\n\n" + _CLAUDE_MD_SECTION
+            target.write_text(content, encoding="utf-8")
+            print(f"aikgraph section written to {target.resolve()}")
     else:
-        new_content = _CLAUDE_MD_SECTION
+        target.write_text(_CLAUDE_MD_SECTION, encoding="utf-8")
+        print(f"aikgraph section written to {target.resolve()}")
 
-    target.write_text(new_content, encoding="utf-8")
-    print(f"aikgraph section written to {target.resolve()}")
+    _install_claude_hook(project_dir)
 
-    _install_claude_hook(project_dir or Path("."))
+    out_dir = platform_out_dir("claude", project_dir)
+    write_marker(out_dir)
+    print(f"  {out_dir}/  ->  output directory ready")
 
     print()
     print("Claude Code will now check the knowledge graph before answering")
     print("codebase questions and rebuild it after code changes.")
+    print(f"Run `aikgraph update` to populate {out_dir}/.")
 
 
 def claude_uninstall(project_dir: Path | None = None) -> None:

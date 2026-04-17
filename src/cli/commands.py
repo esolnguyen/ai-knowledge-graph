@@ -6,6 +6,12 @@ import json
 import sys
 from pathlib import Path
 
+from aikgraph.utils.paths import resolve_out_dir
+
+
+def _default_graph_path(project_dir: Path | None = None) -> str:
+    return str(resolve_out_dir(project_dir) / "graph.json")
+
 
 def cmd_query(argv: list[str]) -> None:
     if len(argv) < 1:
@@ -25,7 +31,7 @@ def cmd_query(argv: list[str]) -> None:
     question = argv[0]
     use_dfs = "--dfs" in argv
     budget = 2000
-    graph_path = "aikgraph-out/graph.json"
+    graph_path = _default_graph_path()
     rest = argv[1:]
     i = 0
     while i < len(rest):
@@ -82,7 +88,7 @@ def cmd_save_result(argv: list[str]) -> None:
     p.add_argument("--answer", required=True)
     p.add_argument("--type", dest="query_type", default="query")
     p.add_argument("--nodes", nargs="*", default=[])
-    p.add_argument("--memory-dir", default="aikgraph-out/memory")
+    p.add_argument("--memory-dir", default=str(resolve_out_dir() / "memory"))
     opts = p.parse_args(argv)
     from aikgraph.extraction.ingest import save_query_result
 
@@ -109,7 +115,7 @@ def cmd_path(argv: list[str]) -> None:
 
     source_label = argv[0]
     target_label = argv[1]
-    graph_path = "aikgraph-out/graph.json"
+    graph_path = _default_graph_path()
     rest = argv[2:]
     for i, a in enumerate(rest):
         if a == "--graph" and i + 1 < len(rest):
@@ -159,7 +165,7 @@ def cmd_explain(argv: list[str]) -> None:
     from networkx.readwrite import json_graph
 
     label = argv[0]
-    graph_path = "aikgraph-out/graph.json"
+    graph_path = _default_graph_path()
     rest = argv[1:]
     for i, a in enumerate(rest):
         if a == "--graph" and i + 1 < len(rest):
@@ -229,7 +235,7 @@ def cmd_add(argv: list[str]) -> None:
     try:
         saved = ingest(url, target_dir, author=author, contributor=contributor)
         print(f"Saved to {saved}")
-        print("Run /aikgraph --update in your AI assistant to update the graph.")
+        print("Run `aikgraph update` to update the graph.")
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         sys.exit(1)
@@ -251,10 +257,11 @@ def cmd_watch(argv: list[str]) -> None:
 
 def cmd_cluster_only(argv: list[str]) -> None:
     watch_path = Path(argv[0]) if argv else Path(".")
-    graph_json = watch_path / "aikgraph-out" / "graph.json"
+    out_dir = resolve_out_dir(watch_path)
+    graph_json = out_dir / "graph.json"
     if not graph_json.exists():
         print(
-            f"error: no graph found at {graph_json} — run /aikgraph first",
+            f"error: no graph found at {graph_json} — run `aikgraph update` first",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -292,7 +299,7 @@ def cmd_cluster_only(argv: list[str]) -> None:
         str(watch_path),
         suggested_questions=questions,
     )
-    out = watch_path / "aikgraph-out"
+    out = out_dir
     (out / "REPORT.md").write_text(report, encoding="utf-8")
     to_json(G, communities, str(out / "graph.json"))
     print(f"Done — {len(communities)} communities. REPORT.md and graph.json updated.")
@@ -311,7 +318,7 @@ def cmd_update(argv: list[str]) -> None:
     ok = _rebuild_code(watch_path, obsidian=obsidian)
     if ok:
         print(
-            "Code graph updated. For doc/paper/image changes run /aikgraph --update in your AI assistant."
+            "Code graph updated. For doc/paper/image changes re-run `aikgraph update`."
         )
     else:
         print("Nothing to update or rebuild failed — check output above.")
@@ -320,7 +327,7 @@ def cmd_update(argv: list[str]) -> None:
 def cmd_benchmark(argv: list[str]) -> None:
     from aikgraph.integrations.benchmark import run_benchmark, print_benchmark
 
-    graph_path = argv[0] if argv else "aikgraph-out/graph.json"
+    graph_path = argv[0] if argv else _default_graph_path()
     corpus_words = None
     detect_path = Path(".aikgraph_detect.json")
     if detect_path.exists():

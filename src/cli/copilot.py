@@ -1,14 +1,24 @@
-"""GitHub Copilot CLI skill uninstall (install routes through platforms.install)."""
+"""GitHub Copilot CLI project-local install: prepare .copilot/aikgraph-out/."""
 from __future__ import annotations
 
 from pathlib import Path
 
-from aikgraph.cli.platforms import _PLATFORM_CONFIG
+from aikgraph.utils.paths import platform_out_dir, write_marker
+
+
+def copilot_install(project_dir: Path | None = None) -> None:
+    """Create .copilot/aikgraph-out/ so `aikgraph update` writes output there."""
+    project_dir = project_dir or Path(".")
+    out_dir = platform_out_dir("copilot", project_dir)
+    write_marker(out_dir)
+    print(f"  {out_dir}/  ->  output directory ready")
+    print()
+    print(f"Run `aikgraph update` from the shell to populate {out_dir}/.")
 
 
 def copilot_uninstall() -> None:
-    """Remove the aikgraph skill from ~/.copilot/skills/aikgraph/."""
-    skill_dst = Path.home() / _PLATFORM_CONFIG["copilot"]["skill_dst"]
+    """Remove any legacy global aikgraph skill from ~/.copilot/skills/aikgraph/."""
+    skill_dst = Path.home() / ".copilot" / "skills" / "aikgraph" / "SKILL.md"
     removed: list[str] = []
     if skill_dst.exists():
         skill_dst.unlink()

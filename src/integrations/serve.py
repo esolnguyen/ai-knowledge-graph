@@ -25,7 +25,7 @@ def _load_graph(graph_path: str) -> nx.Graph:
         print(f"error: {exc}", file=sys.stderr)
         sys.exit(1)
     except json.JSONDecodeError as exc:
-        print(f"error: graph.json is corrupted ({exc}). Re-run /aikgraph to rebuild.", file=sys.stderr)
+        print(f"error: graph.json is corrupted ({exc}). Re-run `aikgraph update` to rebuild.", file=sys.stderr)
         sys.exit(1)
 
 
@@ -147,7 +147,7 @@ def _filter_blank_stdin() -> None:
     sys.stdin = open(0, "r", closefd=False)
 
 
-def serve(graph_path: str = "aikgraph-out/graph.json") -> None:
+def serve(graph_path: str | None = None) -> None:
     """Start the MCP server. Requires pip install mcp."""
     try:
         from mcp.server import Server
@@ -156,6 +156,10 @@ def serve(graph_path: str = "aikgraph-out/graph.json") -> None:
     except ImportError as e:
         raise ImportError("mcp not installed. Run: pip install mcp") from e
 
+    if graph_path is None:
+        from aikgraph.utils.paths import resolve_out_dir
+
+        graph_path = str(resolve_out_dir() / "graph.json")
     G = _load_graph(graph_path)
     communities = _communities_from_graph(G)
 
@@ -369,5 +373,5 @@ def serve(graph_path: str = "aikgraph-out/graph.json") -> None:
 
 
 if __name__ == "__main__":
-    graph_path = sys.argv[1] if len(sys.argv) > 1 else "aikgraph-out/graph.json"
+    graph_path = sys.argv[1] if len(sys.argv) > 1 else None
     serve(graph_path)

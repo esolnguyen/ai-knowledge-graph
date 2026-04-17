@@ -2,18 +2,12 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 from aikgraph.cli import commands
 from aikgraph.cli.claude import claude_install, claude_uninstall
 from aikgraph.cli.copilot import copilot_uninstall
 from aikgraph.cli.kiro import kiro_install, kiro_uninstall
-from aikgraph.cli.platforms import (
-    _PLATFORM_CONFIG,
-    __version__,
-    _check_skill_version,
-    install,
-)
+from aikgraph.cli.platforms import install
 
 
 def _print_help() -> None:
@@ -21,7 +15,7 @@ def _print_help() -> None:
     print()
     print("Commands:")
     print(
-        "  install [--platform P]  copy skill to platform config dir (claude|copilot|kiro)"
+        "  install [--platform P]  install aikgraph assistant integration (claude|copilot|kiro)"
     )
     print('  path "A" "B"            shortest path between two nodes in graph.json')
     print(
@@ -83,12 +77,10 @@ def _print_help() -> None:
     print(
         "  claude uninstall        remove aikgraph section from CLAUDE.md + PreToolUse hook"
     )
-    print(
-        "  copilot install         copy aikgraph skill to ~/.copilot/skills (GitHub Copilot CLI)"
-    )
-    print("  copilot uninstall       remove aikgraph skill from ~/.copilot/skills")
-    print("  kiro install            write skill + steering to .kiro/ (Kiro IDE/CLI)")
-    print("  kiro uninstall          remove skill + steering from .kiro/")
+    print("  copilot install         prepare .copilot/aikgraph-out/ for GitHub Copilot")
+    print("  copilot uninstall       remove legacy aikgraph skill from ~/.copilot/skills")
+    print("  kiro install            write always-on steering + prepare .kiro/aikgraph-out/")
+    print("  kiro uninstall          remove steering from .kiro/steering/")
     print()
 
 
@@ -108,13 +100,6 @@ def _parse_install_platform(args: list[str]) -> str:
 
 
 def main() -> None:
-    # Warn on stale skills unless we're (un)installing.
-    if not any(arg in ("install", "uninstall") for arg in sys.argv):
-        for skill_dst in {
-            Path.home() / cfg["skill_dst"] for cfg in _PLATFORM_CONFIG.values()
-        }:
-            _check_skill_version(skill_dst)
-
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
         _print_help()
         return
@@ -135,7 +120,9 @@ def main() -> None:
     elif cmd == "copilot":
         subcmd = sys.argv[2] if len(sys.argv) > 2 else ""
         if subcmd == "install":
-            install(platform="copilot")
+            from aikgraph.cli.copilot import copilot_install
+
+            copilot_install()
         elif subcmd == "uninstall":
             copilot_uninstall()
         else:

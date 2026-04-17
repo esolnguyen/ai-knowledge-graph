@@ -168,13 +168,15 @@ def validate_graph_path(path: str | Path, base: Path | None = None) -> Path:
                 base = candidate
                 break
         if base is None:
-            base = Path("aikgraph-out").resolve()
+            from aikgraph.utils.paths import resolve_out_dir
+
+            base = resolve_out_dir().resolve()
 
     base = base.resolve()
     if not base.exists():
         raise ValueError(
             f"Graph base directory does not exist: {base}. "
-            "Run /aikgraph first to build the graph."
+            "Run `aikgraph update` first to build the graph."
         )
 
     resolved = Path(path).resolve()

@@ -91,8 +91,12 @@ if [ "$BRANCH_SWITCH" != "1" ]; then
     exit 0
 fi
 
-# Only run if aikgraph-out/ exists (graph has been built before)
-if [ ! -d "aikgraph-out" ]; then
+# Only run if an aikgraph-out/ directory exists (graph has been built before).
+# Looks under the assistant config dirs as well as the legacy root location.
+if [ ! -d "aikgraph-out" ] \
+    && [ ! -d ".kiro/aikgraph-out" ] \
+    && [ ! -d ".claude/aikgraph-out" ] \
+    && [ ! -d ".copilot/aikgraph-out" ]; then
     exit 0
 fi
 

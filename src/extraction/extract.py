@@ -2991,31 +2991,36 @@ def _check_tree_sitter_version() -> None:
         )
 
 
-def extract(paths: list[Path]) -> dict:
+def extract(paths: list[Path], root: Path | None = None) -> dict:
     """Extract AST nodes and edges from a list of code files.
 
     Two-pass process:
     1. Per-file structural extraction (classes, functions, imports)
     2. Cross-file import resolution: turns file-level imports into
        class-level INFERRED edges (DigestAuth --uses--> Response)
+
+    If *root* is provided, cache entries are placed under resolve_out_dir(root).
+    Otherwise root is inferred from the longest common path of *paths* — note
+    that this makes cache location depend on input shape, so callers that own
+    a project directory should pass it explicitly.
     """
     _check_tree_sitter_version()
     per_file: list[dict] = []
 
-    # Infer a common root for cache keys
-    try:
-        if not paths:
+    if root is None:
+        try:
+            if not paths:
+                root = Path(".")
+            elif len(paths) == 1:
+                root = paths[0].parent
+            else:
+                common_len = sum(
+                    1 for i in range(min(len(p.parts) for p in paths))
+                    if len({p.parts[i] for p in paths}) == 1
+                )
+                root = Path(*paths[0].parts[:common_len]) if common_len else Path(".")
+        except Exception:
             root = Path(".")
-        elif len(paths) == 1:
-            root = paths[0].parent
-        else:
-            common_len = sum(
-                1 for i in range(min(len(p.parts) for p in paths))
-                if len({p.parts[i] for p in paths}) == 1
-            )
-            root = Path(*paths[0].parts[:common_len]) if common_len else Path(".")
-    except Exception:
-        root = Path(".")
 
     _DISPATCH: dict[str, Any] = {
         ".py": extract_python,
@@ -3095,6 +3100,11 @@ def extract(paths: list[Path]) -> dict:
                 )
     if total >= _PROGRESS_INTERVAL:
         print(f"  AST extraction: {total}/{total} files (100%)", flush=True)
+
+    # Persist the mtime/size index so the next run can skip hashing unchanged files.
+    from aikgraph.extraction.cache import flush_cache_index
+
+    flush_cache_index()
 
     per_file = [r for r in aligned if r is not None]
 

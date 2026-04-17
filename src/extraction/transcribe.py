@@ -19,8 +19,13 @@ VIDEO_EXTENSIONS = {
 URL_PREFIXES = ("http://", "https://", "www.")
 
 _DEFAULT_MODEL = "base"
-_TRANSCRIPTS_DIR = "aikgraph-out/transcripts"
 _FALLBACK_PROMPT = "Use proper punctuation and paragraph breaks."
+
+
+def _default_transcripts_dir() -> Path:
+    from aikgraph.utils.paths import resolve_out_dir
+
+    return resolve_out_dir() / "transcripts"
 
 
 def _model_name() -> str:
@@ -138,7 +143,7 @@ def transcribe(
     initial_prompt: domain hint for Whisper (built from corpus god nodes).
     force: re-transcribe even if transcript already exists.
     """
-    out_dir = Path(output_dir) if output_dir else Path(_TRANSCRIPTS_DIR)
+    out_dir = Path(output_dir) if output_dir else _default_transcripts_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if is_url(str(video_path)):

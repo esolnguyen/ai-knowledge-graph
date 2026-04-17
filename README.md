@@ -115,8 +115,6 @@ The AST-only `update` command is the LLM-free subset of a larger pipeline. The *
 
 ### Kiro
 
-Fully functional today. The skill ships in this repo.
-
 ```bash
 cd ~/projects/my-project
 aikgraph kiro install
@@ -124,29 +122,33 @@ aikgraph kiro install
 
 Installs:
 
-- `.kiro/skills/aikgraph/`: `SKILL.md` (dispatcher) plus 9 mode files (`pipeline.md`, `update.md`, `query.md`, `path.md`, `explain.md`, `add.md`, `watch.md`, `cluster-only.md`, `hooks.md`)
-- `.kiro/steering/aikgraph.md`: always-on steering that tells Kiro to consult `REPORT.md` before answering architecture questions
+- `~/.kiro/skills/aikgraph/SKILL.md` (global): skill that teaches Kiro when and how to invoke `aikgraph query "..."`, `aikgraph path "A" "B"`, `aikgraph explain "X"`, and the rest of the CLI. Installed once; picked up by Kiro across every project.
+- `./.kiro/steering/aikgraph.md` (project-local): always-on steering that points Kiro at this project's `REPORT.md` before answering architecture questions
+- `./.kiro/aikgraph-out/` (project-local): output directory where `aikgraph update` writes `graph.json` and `REPORT.md`
 
-Open Kiro in `~/projects/my-project` and type `/aikgraph` to run the full pipeline.
+Run `aikgraph update` from the shell to build/refresh the graph.
 
 ### Claude Code
 
 ```bash
 cd ~/projects/my-project
-aikgraph claude install   # append CLAUDE.md section + register PreToolUse hook
+aikgraph claude install
 ```
 
-In a Claude Code session, type `/aikgraph`.
+Installs:
 
-> ⚠️ The base skill file `src/skill.md` isn't in the repo yet, so `aikgraph install --platform claude` will error until it's added.
+- `CLAUDE.md` section that points Claude Code at `REPORT.md` + graph.json
+- PreToolUse hook that runs `aikgraph update` when code changes
+- `.claude/aikgraph-out/`: project-local output directory
 
 ### GitHub Copilot CLI
 
 ```bash
-aikgraph install --platform copilot
+cd ~/projects/my-project
+aikgraph copilot install
 ```
 
-> ⚠️ Same caveat: `src/skill-copilot.md` is also missing from the repo.
+Prepares `.copilot/aikgraph-out/` as the output directory. Run `aikgraph update` to populate it.
 
 ### Uninstalling
 

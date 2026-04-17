@@ -1,5 +1,3 @@
-"""Community detection on NetworkX graphs. Uses Leiden (graspologic) if available, falls back to Louvain (networkx). Splits oversized communities. Returns cohesion scores."""
-
 from __future__ import annotations
 import contextlib
 import inspect

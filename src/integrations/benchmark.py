@@ -65,7 +65,7 @@ _SAMPLE_QUESTIONS = [
 
 
 def run_benchmark(
-    graph_path: str = "aikgraph-out/graph.json",
+    graph_path: str | None = None,
     corpus_words: int | None = None,
     questions: list[str] | None = None,
 ) -> dict:
@@ -78,6 +78,10 @@ def run_benchmark(
 
     Returns dict with: corpus_tokens, avg_query_tokens, reduction_ratio, per_question
     """
+    if graph_path is None:
+        from aikgraph.utils.paths import resolve_out_dir
+
+        graph_path = str(resolve_out_dir() / "graph.json")
     data = json.loads(Path(graph_path).read_text(encoding="utf-8"))
     try:
         G = json_graph.node_link_graph(data, edges="links")

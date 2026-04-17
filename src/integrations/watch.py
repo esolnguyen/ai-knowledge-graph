@@ -38,18 +38,22 @@ def _rebuild_code(
         from aikgraph.output.report import generate
         from aikgraph.output.json_export import to_json
 
-        detected = detect(watch_path, follow_symlinks=follow_symlinks)
+        detected = detect(
+            watch_path, follow_symlinks=follow_symlinks, corpus_stats=False
+        )
         code_files = [Path(f) for f in detected["files"]["code"]]
 
         if not code_files:
             print("[aikgraph watch] No code files found - nothing to rebuild.")
             return False
 
-        result = extract(code_files)
+        result = extract(code_files, root=watch_path)
 
         # Preserve semantic nodes/edges from a previous full run.
         # AST-only rebuild replaces code nodes; doc/paper/image nodes are kept.
-        out = watch_path / "aikgraph-out"
+        from aikgraph.utils.paths import resolve_out_dir
+
+        out = resolve_out_dir(watch_path)
         existing_graph = out / "graph.json"
         if existing_graph.exists():
             try:
@@ -152,7 +156,9 @@ def _rebuild_code(
 
 def _notify_only(watch_path: Path) -> None:
     """Write a flag file and print a notification (fallback for non-code-only corpora)."""
-    flag = watch_path / "aikgraph-out" / "needs_update"
+    from aikgraph.utils.paths import resolve_out_dir
+
+    flag = resolve_out_dir(watch_path) / "needs_update"
     flag.parent.mkdir(parents=True, exist_ok=True)
     flag.write_text("1", encoding="utf-8")
     print(f"\n[aikgraph watch] New or changed files detected in {watch_path}")
@@ -160,7 +166,7 @@ def _notify_only(watch_path: Path) -> None:
         "[aikgraph watch] Non-code files changed - semantic re-extraction requires LLM."
     )
     print(
-        "[aikgraph watch] Run `/aikgraph --update` in Claude Code to update the graph."
+        "[aikgraph watch] Run `aikgraph update` to update the graph."
     )
     print(f"[aikgraph watch] Flag written to {flag}")
 
@@ -175,7 +181,7 @@ def watch(watch_path: Path, debounce: float = 3.0) -> None:
 
     For code-only changes: re-runs AST extraction + rebuild immediately (no LLM).
     For doc/paper/image changes: writes a needs_update flag and notifies the user
-    to run /aikgraph --update (LLM extraction required).
+    to run `aikgraph update` (LLM extraction required).
 
     debounce: seconds to wait after the last change before triggering (avoids
     running on every keystroke when many files are saved at once).
@@ -214,7 +220,7 @@ def watch(watch_path: Path, debounce: float = 3.0) -> None:
     print(f"[aikgraph watch] Watching {watch_path.resolve()} - press Ctrl+C to stop")
     print(
         f"[aikgraph watch] Code changes rebuild graph automatically. "
-        f"Doc/image changes require /aikgraph --update."
+        f"Doc/image changes require `aikgraph update`."
     )
     print(f"[aikgraph watch] Debounce: {debounce}s")
 
