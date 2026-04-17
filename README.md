@@ -130,20 +130,20 @@ Examples target `~/projects/my-project` (any source folder works). Substitute yo
 ### Build a graph
 
 ```bash
-aikgraph update ~/projects/my-project                 # all outputs (default)
-aikgraph update ~/projects/my-project --no-obsidian   # skip Obsidian vault
-aikgraph update ~/projects/my-project --no-html --no-svg   # JSON + REPORT only
+aikgraph update ~/projects/my-project                            # JSON + REPORT only (default)
+aikgraph update ~/projects/my-project --html --svg --obsidian    # generate all extra outputs
+aikgraph update ~/projects/my-project --html                     # add interactive HTML only
 ```
 
 Outputs land in `<target>/aikgraph-out/`:
 
-| File / Folder | Purpose | Opt out |
-|---------------|---------|---------|
-| `graph.json` | Full graph payload (GraphRAG-compatible) | — |
-| `REPORT.md` | Audit write-up covering god nodes, communities, and follow-up questions | — |
-| `graph.html` | Interactive vis.js visualization (dark theme, search, community legend) | `--no-html` |
-| `graph.svg` | Static matplotlib render (needs `matplotlib`) | `--no-svg` |
-| `obsidian/` | Obsidian vault: one `.md` note per node with wikilinks, community overview notes, `graph.canvas`, and per-community colors in `.obsidian/graph.json` | `--no-obsidian` |
+| File / Folder | Purpose | Opt in |
+|---------------|---------|--------|
+| `graph.json` | Full graph payload (GraphRAG-compatible) | always |
+| `REPORT.md` | Audit write-up covering god nodes, communities, and follow-up questions | always |
+| `graph.html` | Interactive vis.js visualization (dark theme, search, community legend) | `--html` |
+| `graph.svg` | Static matplotlib render (needs `matplotlib`) | `--svg` |
+| `obsidian/` | Obsidian vault: one `.md` note per node with wikilinks, community overview notes, `graph.canvas`, and per-community colors in `.obsidian/graph.json` | `--obsidian` |
 
 Expected final line:
 
@@ -241,8 +241,8 @@ aikgraph <platform> uninstall   # platform: claude | copilot | kiro
 ### Graph construction (no LLM required)
 
 ```
-aikgraph update <path>                   # AST extract + rebuild (graph.json, REPORT.md, graph.html, graph.svg, obsidian/)
-aikgraph update <path> --no-obsidian --no-html --no-svg   # disable individual outputs
+aikgraph update <path>                            # AST extract + rebuild (graph.json + REPORT.md only)
+aikgraph update <path> --html --svg --obsidian    # opt into extra outputs
 aikgraph cluster-only <path>             # re-cluster an existing graph.json
 aikgraph watch <path>                    # auto-rebuild on save (needs watchdog)
 ```

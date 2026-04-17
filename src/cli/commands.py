@@ -306,9 +306,9 @@ def cmd_cluster_only(argv: list[str]) -> None:
 
 
 def cmd_update(argv: list[str]) -> None:
-    obsidian = "--no-obsidian" not in argv
-    html = "--no-html" not in argv
-    svg = "--no-svg" not in argv
+    obsidian = "--obsidian" in argv
+    html = "--html" in argv
+    svg = "--svg" in argv
     positional = [a for a in argv if not a.startswith("--")]
     watch_path = Path(positional[0]) if positional else Path(".")
     if not watch_path.exists():
