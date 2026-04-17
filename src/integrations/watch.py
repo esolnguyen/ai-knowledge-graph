@@ -19,7 +19,12 @@ _CODE_EXTENSIONS = CODE_EXTENSIONS
 
 
 def _rebuild_code(
-    watch_path: Path, *, follow_symlinks: bool = False, obsidian: bool = False
+    watch_path: Path,
+    *,
+    follow_symlinks: bool = False,
+    obsidian: bool = False,
+    html: bool = False,
+    svg: bool = False,
 ) -> bool:
     """Re-run AST extraction + build + cluster + report for code files. No LLM needed.
 
@@ -136,6 +141,30 @@ def _rebuild_code(
                 G, communities, str(vault_dir / "graph.canvas"), community_labels=labels
             )
             print(f"[aikgraph watch] Obsidian vault: {n_notes} notes in {vault_dir}")
+
+        if html:
+            try:
+                from aikgraph.output.html import to_html
+
+                html_path = out / "graph.html"
+                to_html(G, communities, str(html_path), community_labels=labels)
+                print(f"[aikgraph watch] HTML: {html_path}")
+            except ValueError as exc:
+                print(f"[aikgraph watch] HTML skipped: {exc}")
+            except Exception as exc:
+                print(f"[aikgraph watch] HTML failed: {exc}")
+
+        if svg:
+            try:
+                from aikgraph.output.svg import to_svg
+
+                svg_path = out / "graph.svg"
+                to_svg(G, communities, str(svg_path), community_labels=labels)
+                print(f"[aikgraph watch] SVG: {svg_path}")
+            except ImportError as exc:
+                print(f"[aikgraph watch] SVG skipped: {exc}")
+            except Exception as exc:
+                print(f"[aikgraph watch] SVG failed: {exc}")
 
         # clear stale needs_update flag if present
         flag = out / "needs_update"

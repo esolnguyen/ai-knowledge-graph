@@ -306,7 +306,9 @@ def cmd_cluster_only(argv: list[str]) -> None:
 
 
 def cmd_update(argv: list[str]) -> None:
-    obsidian = "--obsidian" in argv
+    obsidian = "--no-obsidian" not in argv
+    html = "--no-html" not in argv
+    svg = "--no-svg" not in argv
     positional = [a for a in argv if not a.startswith("--")]
     watch_path = Path(positional[0]) if positional else Path(".")
     if not watch_path.exists():
@@ -315,7 +317,7 @@ def cmd_update(argv: list[str]) -> None:
     from aikgraph.integrations.watch import _rebuild_code
 
     print(f"Re-extracting code files in {watch_path} (no LLM needed)...")
-    ok = _rebuild_code(watch_path, obsidian=obsidian)
+    ok = _rebuild_code(watch_path, obsidian=obsidian, html=html, svg=svg)
     if ok:
         print(
             "Code graph updated. For doc/paper/image changes re-run `aikgraph update`."

@@ -6,6 +6,7 @@
 
 - [How it works](#how-it-works)
 - [Installation](#installation)
+- [Quickstart](#quickstart)
 - [Usage](#usage)
   - [Build a graph](#build-a-graph)
   - [Explore the graph](#explore-the-graph)
@@ -48,6 +49,80 @@ You should see `Usage: aikgraph <command>` followed by the command list.
 
 ---
 
+## Quickstart
+
+End-to-end: build a graph over one or more repos, wire up Kiro, and let Kiro read the graph.
+
+### 1. Collect the code you want graphed into one folder
+
+Pick a workspace folder (anywhere on disk). Clone every repo you want in the graph underneath it:
+
+```bash
+mkdir -p ~/projects/my-workspace
+cd ~/projects/my-workspace
+
+git clone git@github.com:your-org/service-a.git
+git clone git@github.com:your-org/service-b.git
+git clone git@github.com:your-org/shared-lib.git
+```
+
+The graph treats the workspace as one unit — cross-repo calls and imports become real edges.
+
+### 2. Build the graph inside that folder
+
+```bash
+cd ~/projects/my-workspace
+aikgraph update .
+```
+
+Output lands **inside the workspace**, not in your home directory:
+
+```
+~/projects/my-workspace/
+├── service-a/
+├── service-b/
+├── shared-lib/
+└── aikgraph-out/            <-- created by `aikgraph update`
+    ├── graph.json
+    ├── REPORT.md
+    ├── graph.html           (open in browser)
+    ├── graph.svg
+    └── obsidian/            (open as an Obsidian vault)
+```
+
+> **Heads up:** `aikgraph update` never writes to `~/.kiro/` or any home-directory location. Outputs are always project-local.
+
+### 3. Install the Kiro skill
+
+```bash
+cd ~/projects/my-workspace
+aikgraph kiro install
+```
+
+This does two things:
+
+- Drops the skill at `~/.kiro/skills/aikgraph/SKILL.md` — **global**, so Kiro picks it up across every project.
+- Writes `./.kiro/steering/aikgraph.md` and prepares `./.kiro/aikgraph-out/` — **project-local**. After this, `aikgraph update` will write the graph under `./.kiro/aikgraph-out/` instead of `./aikgraph-out/` (the marker file redirects the output path).
+
+Re-run the update so outputs land in the Kiro-aware location:
+
+```bash
+aikgraph update .
+ls .kiro/aikgraph-out/     # graph.json, REPORT.md, graph.html, ...
+```
+
+### 4. Open Kiro and ask about the code
+
+Open the workspace in Kiro. The always-on steering file tells Kiro to read `./.kiro/aikgraph-out/REPORT.md` before answering architecture questions, and the skill teaches it to run `aikgraph query`, `aikgraph path`, and `aikgraph explain` for targeted lookups. Ask things like:
+
+- "Walk me through how service-a calls shared-lib."
+- "What are the god nodes in this workspace?"
+- "Shortest path from `LoginForm` to `UserRepository`."
+
+When code changes, re-run `aikgraph update .` (or set up `aikgraph watch .` / `aikgraph hook install` — see [Keep the graph fresh](#keep-the-graph-fresh)).
+
+---
+
 ## Usage
 
 Examples target `~/projects/my-project` (any source folder works). Substitute your own path.
@@ -55,17 +130,20 @@ Examples target `~/projects/my-project` (any source folder works). Substitute yo
 ### Build a graph
 
 ```bash
-aikgraph update ~/projects/my-project              # graph.json + REPORT.md
-aikgraph update ~/projects/my-project --obsidian   # also export an Obsidian vault
+aikgraph update ~/projects/my-project                 # all outputs (default)
+aikgraph update ~/projects/my-project --no-obsidian   # skip Obsidian vault
+aikgraph update ~/projects/my-project --no-html --no-svg   # JSON + REPORT only
 ```
 
 Outputs land in `<target>/aikgraph-out/`:
 
-| File / Folder | Purpose |
-|---------------|---------|
-| `graph.json` | Full graph payload (GraphRAG-compatible) |
-| `REPORT.md` | Audit write-up covering god nodes, communities, and follow-up questions |
-| `obsidian/` *(with `--obsidian`)* | Obsidian vault: one `.md` note per node with wikilinks, community overview notes, `graph.canvas`, and per-community colors in `.obsidian/graph.json` |
+| File / Folder | Purpose | Opt out |
+|---------------|---------|---------|
+| `graph.json` | Full graph payload (GraphRAG-compatible) | — |
+| `REPORT.md` | Audit write-up covering god nodes, communities, and follow-up questions | — |
+| `graph.html` | Interactive vis.js visualization (dark theme, search, community legend) | `--no-html` |
+| `graph.svg` | Static matplotlib render (needs `matplotlib`) | `--no-svg` |
+| `obsidian/` | Obsidian vault: one `.md` note per node with wikilinks, community overview notes, `graph.canvas`, and per-community colors in `.obsidian/graph.json` | `--no-obsidian` |
 
 Expected final line:
 
@@ -163,8 +241,8 @@ aikgraph <platform> uninstall   # platform: claude | copilot | kiro
 ### Graph construction (no LLM required)
 
 ```
-aikgraph update <path>                   # AST extract + rebuild graph
-aikgraph update <path> --obsidian        # also emit an Obsidian vault + graph.canvas
+aikgraph update <path>                   # AST extract + rebuild (graph.json, REPORT.md, graph.html, graph.svg, obsidian/)
+aikgraph update <path> --no-obsidian --no-html --no-svg   # disable individual outputs
 aikgraph cluster-only <path>             # re-cluster an existing graph.json
 aikgraph watch <path>                    # auto-rebuild on save (needs watchdog)
 ```
