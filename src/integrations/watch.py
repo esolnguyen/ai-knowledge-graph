@@ -18,6 +18,37 @@ _WATCHED_EXTENSIONS = (
 _CODE_EXTENSIONS = CODE_EXTENSIONS
 
 
+def _merge_semantic_extract(
+    result: dict, extract_path: Path, *, log_prefix: str = "[aikgraph update]"
+) -> dict:
+    """Merge a freshly-produced semantic extract (.aikgraph_extract.json) into *result*.
+
+    New semantic nodes/edges from the extract take precedence over anything with
+    the same id already in *result*. Returns the merged dict.
+    """
+    try:
+        sem = json.loads(extract_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"{log_prefix} Failed to read {extract_path}: {exc}")
+        return result
+
+    existing_ids = {n["id"] for n in result.get("nodes", [])}
+    new_nodes = [n for n in sem.get("nodes", []) if n["id"] not in existing_ids]
+    merged = {
+        "nodes": result.get("nodes", []) + new_nodes,
+        "edges": result.get("edges", []) + sem.get("edges", []),
+        "hyperedges": result.get("hyperedges", []) + sem.get("hyperedges", []),
+        "input_tokens": result.get("input_tokens", 0) + sem.get("input_tokens", 0),
+        "output_tokens": result.get("output_tokens", 0) + sem.get("output_tokens", 0),
+    }
+    print(
+        f"{log_prefix} Merged {extract_path.name}: "
+        f"+{len(new_nodes)} nodes, +{len(sem.get('edges', []))} edges, "
+        f"+{len(sem.get('hyperedges', []))} hyperedges"
+    )
+    return merged
+
+
 def _rebuild_code(
     watch_path: Path,
     *,
@@ -25,8 +56,13 @@ def _rebuild_code(
     obsidian: bool = False,
     html: bool = False,
     svg: bool = False,
+    semantic_extract: Path | None = None,
 ) -> bool:
     """Re-run AST extraction + build + cluster + report for code files. No LLM needed.
+
+    If *semantic_extract* (default: ``.aikgraph_extract.json`` in CWD) exists, its
+    nodes/edges are merged in before the existing-graph merge. This is how the
+    agent pipeline hands freshly-extracted doc/paper/image data back to the CLI.
 
     Returns True on success, False on error.
     """
@@ -54,6 +90,35 @@ def _rebuild_code(
 
         result = extract(code_files, root=watch_path)
 
+        # Fold in any Azure DevOps sync output (workitem_*.md, _repo.md under
+        # raw/azure/). Does nothing when that directory is absent, so local
+        # rebuilds that never ran `aikgraph update --project ...` are unaffected.
+        from aikgraph.integrations.azure_extract import (
+            extract_azure,
+            link_repos_to_code,
+        )
+
+        azure = extract_azure(watch_path)
+        if azure["nodes"]:
+            repo_code_edges = link_repos_to_code(azure["nodes"], result["nodes"])
+            result = {
+                "nodes": result["nodes"] + azure["nodes"],
+                "edges": result["edges"] + azure["edges"] + repo_code_edges,
+                "hyperedges": result.get("hyperedges", []),
+                "input_tokens": result.get("input_tokens", 0),
+                "output_tokens": result.get("output_tokens", 0),
+            }
+            print(
+                f"[aikgraph update] Azure sync: +{len(azure['nodes'])} nodes, "
+                f"+{len(azure['edges'])} work-item edges, "
+                f"+{len(repo_code_edges)} repo->code edges"
+            )
+
+        # Merge any freshly-produced semantic extract from the agent pipeline.
+        extract_path = semantic_extract or Path(".aikgraph_extract.json")
+        if extract_path.exists():
+            result = _merge_semantic_extract(result, extract_path)
+
         # Preserve semantic nodes/edges from a previous full run.
         # AST-only rebuild replaces code nodes; doc/paper/image nodes are kept.
         from aikgraph.utils.paths import resolve_out_dir
@@ -68,8 +133,12 @@ def _rebuild_code(
                     for n in existing.get("nodes", [])
                     if n.get("file_type") == "code"
                 }
+                # Drop stale azure nodes from the previous graph — we just
+                # re-extracted them above and their attrs should win.
+                fresh_ids = {n["id"] for n in result["nodes"]}
                 sem_nodes = [
-                    n for n in existing.get("nodes", []) if n.get("file_type") != "code"
+                    n for n in existing.get("nodes", [])
+                    if n.get("file_type") != "code" and n["id"] not in fresh_ids
                 ]
                 sem_edges = [
                     e

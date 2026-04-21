@@ -3,14 +3,35 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import sys
 from pathlib import Path
 
 from aikgraph.utils.paths import resolve_out_dir
 
 
+def _safe_project_name(name: str) -> str:
+    """Sanitize a project name for use as a directory component."""
+    cleaned = re.sub(r"[^\w\-.]", "_", name).strip("_")
+    return cleaned or "azure"
+
+
 def _default_graph_path(project_dir: Path | None = None) -> str:
     return str(resolve_out_dir(project_dir) / "graph.json")
+
+
+def _extract_flag(argv: list[str], name: str) -> str | None:
+    """Return the value following `name` (e.g. --project ABCD -> 'ABCD'), or None.
+
+    Also supports `--name=value`.
+    """
+    for i, arg in enumerate(argv):
+        if arg == name and i + 1 < len(argv):
+            return argv[i + 1]
+        if arg.startswith(name + "="):
+            return arg.split("=", 1)[1]
+    return None
 
 
 def cmd_query(argv: list[str]) -> None:
@@ -309,19 +330,89 @@ def cmd_update(argv: list[str]) -> None:
     obsidian = "--obsidian" in argv
     html = "--html" in argv
     svg = "--svg" in argv
-    positional = [a for a in argv if not a.startswith("--")]
+    full = "--full" in argv
+    no_clone = "--no-clone" in argv
+    project = _extract_flag(argv, "--project")
+    repos_csv = _extract_flag(argv, "--repos")
+    since = _extract_flag(argv, "--since")
+    repos_filter = (
+        [r.strip() for r in repos_csv.split(",") if r.strip()] if repos_csv else None
+    )
+
+    flag_values = {v for v in (project, repos_csv, since) if v}
+    positional: list[str] = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a.startswith("--"):
+            if a in {"--project", "--repos", "--since"} and i + 1 < len(argv):
+                i += 2
+                continue
+            i += 1
+            continue
+        if a in flag_values:
+            i += 1
+            continue
+        positional.append(a)
+        i += 1
+
     watch_path = Path(positional[0]) if positional else Path(".")
     if not watch_path.exists():
         print(f"error: path not found: {watch_path}", file=sys.stderr)
         sys.exit(1)
+
+    if project:
+        pat = os.environ.get("AZURE_DEVOPS_PAT")
+        org = os.environ.get("AZURE_DEVOPS_ORG")
+        missing = [
+            n for n, v in (("AZURE_DEVOPS_PAT", pat), ("AZURE_DEVOPS_ORG", org)) if not v
+        ]
+        if missing:
+            print(
+                f"error: {', '.join(missing)} not set in environment",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        from aikgraph.integrations.azure_devops import sync as azure_sync
+
+        target_dir = watch_path / "raw" / "azure"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Syncing Azure DevOps project '{project}' from org '{org}'...")
+        try:
+            counts = azure_sync(
+                org,
+                project,
+                target_dir,
+                pat,
+                full=full,
+                clone_repos=not no_clone,
+                repos_filter=repos_filter,
+                since=since,
+            )
+        except Exception as exc:
+            print(f"error: azure sync failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+        print(f"  fetched: {counts}")
+        print(f"  saved to: {target_dir}/")
+
+        # Per-project graphs land under ~/.kiro/aikgraph-out/<project>/ by
+        # default so they live globally (not inside whichever repo you scanned)
+        # and are reachable from any working directory. An explicit
+        # AIKGRAPH_OUT env var overrides the base.
+        env_base = os.environ.get("AIKGRAPH_OUT")
+        base_out = Path(env_base) if env_base else Path.home() / ".kiro" / "aikgraph-out"
+        project_out = base_out / _safe_project_name(project)
+        project_out.mkdir(parents=True, exist_ok=True)
+        os.environ["AIKGRAPH_OUT"] = str(project_out)
+        print(f"  graph output: {project_out}/")
+
     from aikgraph.integrations.watch import _rebuild_code
 
-    print(f"Re-extracting code files in {watch_path} (no LLM needed)...")
+    print(f"Re-extracting files in {watch_path} (no LLM needed)...")
     ok = _rebuild_code(watch_path, obsidian=obsidian, html=html, svg=svg)
     if ok:
-        print(
-            "Code graph updated. For doc/paper/image changes re-run `aikgraph update`."
-        )
+        print("Graph updated.")
     else:
         print("Nothing to update or rebuild failed — check output above.")
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from importlib import resources
 from pathlib import Path
 
 from aikgraph.utils.paths import platform_out_dir, write_marker
@@ -42,6 +43,43 @@ Rules:
 _CLAUDE_MD_MARKER = "## aikgraph"
 
 
+def _skill_source() -> Path:
+    """Return the path to the bundled SKILL.md inside the installed package."""
+    return Path(str(resources.files("aikgraph").joinpath("skills", "SKILL.md")))
+
+
+def _global_skill_dir() -> Path:
+    return Path.home() / ".claude" / "skills" / "aikgraph"
+
+
+def _install_claude_skill() -> None:
+    """Copy the bundled SKILL.md to ~/.claude/skills/aikgraph/SKILL.md."""
+    skill_src = _skill_source()
+    skill_dir = _global_skill_dir()
+    skill_dst = skill_dir / "SKILL.md"
+    if not skill_src.is_file():
+        print(f"  warning: bundled skill not found at {skill_src}; skipping")
+        return
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    skill_dst.write_text(skill_src.read_text(encoding="utf-8"), encoding="utf-8")
+    print(f"  {skill_dst}  ->  query skill installed (global)")
+
+
+def _uninstall_claude_skill() -> None:
+    """Remove ~/.claude/skills/aikgraph/ (drop the installed skill)."""
+    skill_dir = _global_skill_dir()
+    if not skill_dir.exists():
+        return
+    for child in skill_dir.iterdir():
+        if child.is_file():
+            child.unlink()
+    try:
+        skill_dir.rmdir()
+        print(f"  {skill_dir}  ->  skill removed")
+    except OSError:
+        pass
+
+
 def claude_install(project_dir: Path | None = None) -> None:
     """Write the aikgraph section to the local CLAUDE.md and register the hook."""
     project_dir = project_dir or Path(".")
@@ -59,6 +97,7 @@ def claude_install(project_dir: Path | None = None) -> None:
         target.write_text(_CLAUDE_MD_SECTION, encoding="utf-8")
         print(f"aikgraph section written to {target.resolve()}")
 
+    _install_claude_skill()
     _install_claude_hook(project_dir)
 
     out_dir = platform_out_dir("claude", project_dir)
@@ -98,6 +137,7 @@ def claude_uninstall(project_dir: Path | None = None) -> None:
         print(f"CLAUDE.md was empty after removal - deleted {target.resolve()}")
 
     _uninstall_claude_hook(project_dir or Path("."))
+    _uninstall_claude_skill()
 
 
 def _install_claude_hook(project_dir: Path) -> None:

@@ -11,6 +11,7 @@
   - [Build a graph](#build-a-graph)
   - [Explore the graph](#explore-the-graph)
   - [Keep the graph fresh](#keep-the-graph-fresh)
+  - [Sync Azure DevOps](#sync-azure-devops)
 - [AI assistant integration](#ai-assistant-integration)
 - [Command reference](#command-reference)
 - [Development](#development)
@@ -185,6 +186,36 @@ Pick whichever fits your workflow:
 
 Manage hooks with `aikgraph hook status` and `aikgraph hook uninstall`. The watcher runs in the foreground; `Ctrl+C` to stop.
 
+### Sync Azure DevOps
+
+Pull an Azure DevOps project's work items and repos into the same graph as your code. Work items (PBIs, bugs, epics) become document nodes; repos become document nodes and their default-branch checkouts feed the AST extractor, so cross-links between tickets and real code symbols show up as edges.
+
+Set credentials once, then pass `--project` to `aikgraph update`:
+
+```bash
+export AZURE_DEVOPS_ORG="your-org"
+export AZURE_DEVOPS_PAT="..."           # PAT with Work Items (Read) + Code (Read)
+
+aikgraph update ~/projects/my-workspace --project MyProject
+```
+
+What happens:
+
+1. Work items and repos are fetched into `<target>/raw/azure/` as markdown with YAML frontmatter.
+2. Each repo's default branch is shallow-cloned under `<target>/raw/azure/repos/<name>/`.
+3. The normal AST extractor runs over the cloned code, and the Azure extractor emits `parent_of` / `related_to` / `touches_repo` edges from work-item relations plus `contains` edges from repos to code symbols.
+4. The built graph is written under `~/.kiro/aikgraph-out/<project>/` (override with `AIKGRAPH_OUT=<path>`) so it lives globally, not inside the scanned directory.
+
+Incremental state is stored in `<target>/raw/azure/.azure_sync_state.json` — subsequent runs only fetch work items changed since the last cursor and only re-fetch repos whose HEAD moved.
+
+| Flag | Purpose |
+|------|---------|
+| `--project <name>` | Azure DevOps project to sync (required to trigger the sync) |
+| `--since YYYY-MM-DD` | Cap the first-run work-item scan window (default: 365 days back) |
+| `--full` | Ignore saved state; force a full rescan and re-clone |
+| `--no-clone` | Skip the git clone step — fetch work items + repo metadata only |
+| `--repos a,b,c` | Clone only this subset of repos (comma-separated names) |
+
 ---
 
 ## AI assistant integration
@@ -243,9 +274,13 @@ aikgraph <platform> uninstall   # platform: claude | copilot | kiro
 ```
 aikgraph update <path>                            # AST extract + rebuild (graph.json + REPORT.md only)
 aikgraph update <path> --html --svg --obsidian    # opt into extra outputs
+aikgraph update <path> --project <name>           # also sync Azure DevOps (work items + repos)
+   [--since YYYY-MM-DD] [--full] [--no-clone] [--repos a,b,c]
 aikgraph cluster-only <path>             # re-cluster an existing graph.json
 aikgraph watch <path>                    # auto-rebuild on save (needs watchdog)
 ```
+
+Azure DevOps sync requires `AZURE_DEVOPS_ORG` and `AZURE_DEVOPS_PAT` in the environment. See [Sync Azure DevOps](#sync-azure-devops) for details.
 
 ### Open the Obsidian vault
 

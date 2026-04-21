@@ -63,5 +63,5 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-aikgraph = ["skills/kiro/SKILL.md"]
+aikgraph = ["skills/SKILL.md"]
 

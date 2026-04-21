@@ -43,6 +43,24 @@ def _print_help() -> None:
         "    --obsidian              also export an Obsidian vault + graph.canvas"
     )
     print(
+        "    --project <name>        also sync an Azure DevOps project (work items + repos)"
+    )
+    print(
+        "                            requires AZURE_DEVOPS_PAT and AZURE_DEVOPS_ORG env vars"
+    )
+    print(
+        "    --since YYYY-MM-DD      cap first-run work-item scan (default: 365d back)"
+    )
+    print(
+        "    --full                  ignore state; force full rescan + re-clone"
+    )
+    print(
+        "    --no-clone              skip git clone of project repos (metadata only)"
+    )
+    print(
+        "    --repos a,b,c           clone only this subset of repos (comma-separated)"
+    )
+    print(
         "  cluster-only <path>     rerun clustering on an existing graph.json and regenerate report"
     )
     print('  query "<question>"       BFS traversal of graph.json for a question')

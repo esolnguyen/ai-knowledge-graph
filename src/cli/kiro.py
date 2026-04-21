@@ -15,20 +15,38 @@ _KIRO_STEERING = f"""\
 inclusion: always
 ---
 
-aikgraph: A knowledge graph of this project lives in `{_KIRO_OUT}/`. \
-If `{_KIRO_OUT}/REPORT.md` exists, read it before answering architecture questions, \
-tracing dependencies, or searching files — it contains god nodes, community structure, \
-and surprising connections the graph found. Navigate by graph structure instead of grepping raw files. \
-For targeted queries use the `aikgraph` skill (commands: query, path, explain). \
-Run `aikgraph update` from the shell to (re)build the graph.
+# aikgraph — use the graph before scanning files
+
+This project ships a prebuilt knowledge graph at `{_KIRO_OUT}/graph.json` with a
+summary at `{_KIRO_OUT}/REPORT.md`.
+
+BEFORE running `find`, `grep`, `rg`, or reading source files to answer any
+architecture, dependency, call-chain, "where does X live", "how does X reach Y",
+or "what uses X" question, run aikgraph via the `shell` tool:
+
+- `aikgraph query "<question>"`       neighborhood / broad context
+- `aikgraph query "<q>" --dfs`        trace one chain deeper
+- `aikgraph path "A" "B"`             shortest path between two symbols
+- `aikgraph explain "X"`              one node + its immediate neighbors
+
+Fall back to `find`/`grep` only when the graph returns nothing relevant or the
+question is plainly non-structural (e.g. "find all TODO comments", "what files
+were changed today"). When you do fall back, say so explicitly.
+
+Read `{_KIRO_OUT}/REPORT.md` once per session to orient on god nodes and
+community structure. If the graph looks stale after edits, run
+`aikgraph update` before querying.
+
+IMPORTANT: Run aikgraph commands through the `shell` tool. Do NOT output raw
+<bash> markdown blocks.
 """
 
-_KIRO_STEERING_MARKER = "aikgraph: A knowledge graph of this project"
+_KIRO_STEERING_MARKER = "# aikgraph — use the graph before scanning files"
 
 
 def _skill_source() -> Path:
     """Return the path to the bundled SKILL.md inside the installed package."""
-    return Path(str(resources.files("aikgraph").joinpath("skills", "kiro", "SKILL.md")))
+    return Path(str(resources.files("aikgraph").joinpath("skills", "SKILL.md")))
 
 
 def _global_skill_dir() -> Path:
